@@ -18,7 +18,7 @@ function layout(title, body) {
 <body class="min-h-screen bg-gray-50 py-8 px-4">
   <div class="max-w-lg mx-auto">
     <div class="mb-6 text-center">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 414 127.1" width="220" aria-label="Fenalco Santander">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 414 127.1" width="220" aria-label="Fenalco Santander" class="mx-auto block">
         <defs><style>.ls0{fill:#280071}.ls1{fill:#00ce7c}</style></defs>
         <polygon class="ls0" points="179.5 43 179.5 85.4 186.4 85.4 186.4 67.3 200.8 67.3 200.8 60.6 186.4 60.6 186.4 49.7 204.7 49.7 204.7 43 179.5 43"/>
         <path class="ls0" d="M206,70.5c0-8.8,6.1-15.5,15.3-15.5s15.6,7,14.9,17.1h-23.8c.2,4.5,3.8,8.1,9,8.1s6.2-1.3,7.5-4.2h6.9c-1.7,5.6-7,10-14.6,10s-15.3-6.6-15.3-15.5M212.7,67.5h16.5c-1-4.8-4.4-7-8.1-7s-7.6,2.4-8.5,7"/>
