@@ -16,6 +16,7 @@ function renderForm(slug, evento, cfg, errorMsg = null, prevData = {}) {
     ? new Date(evento.fechaInicio).toLocaleDateString('es-CO', {
         day: '2-digit', month: 'long', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
+        timeZone: 'America/Bogota',
       })
     : '';
 
