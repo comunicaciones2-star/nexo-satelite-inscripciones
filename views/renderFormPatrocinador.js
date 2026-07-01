@@ -120,7 +120,7 @@ function renderFormPatrocinador(slug, evento, formularioConfig, nivelesPatrocini
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Sector</label>
-          <input type="text" name="sector" value="${esc(prevData.sector || '')}" class="${INPUT}" placeholder="Retail, Alimentos…">
+          <input type="text" name="sector" id="sectorEmpresa" ${prevType === 'persona' ? 'disabled' : ''} value="${esc(prevData.sector || '')}" class="${INPUT}" placeholder="Retail, Alimentos…">
         </div>
       </div>
     </div>
@@ -143,7 +143,7 @@ function renderFormPatrocinador(slug, evento, formularioConfig, nivelesPatrocini
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Sector</label>
-          <input type="text" name="sector" value="${esc(prevData.sector || '')}" class="${INPUT}" placeholder="Retail, Alimentos…">
+          <input type="text" name="sector" id="sectorPersona" ${prevType !== 'persona' ? 'disabled' : ''} value="${esc(prevData.sector || '')}" class="${INPUT}" placeholder="Retail, Alimentos…">
         </div>
       </div>
     </div>
@@ -212,6 +212,8 @@ function toggleTipo(el) {
   const esEmpresa = el.value === 'true';
   document.getElementById('secEmpresa').style.display = esEmpresa ? '' : 'none';
   document.getElementById('secPersona').style.display = esEmpresa ? 'none' : '';
+  document.getElementById('sectorEmpresa').disabled = !esEmpresa;
+  document.getElementById('sectorPersona').disabled = esEmpresa;
 }
 </script>`;
 
