@@ -3,7 +3,7 @@ const { layout, esc } = require('./layout');
 const INPUT = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#280071]/30';
 const SELECT_CLS = INPUT + ' bg-white';
 
-function renderFormPatrocinador(slug, evento, formularioConfig, nivelesPatrocinio, errorMsg, prevData) {
+function renderFormPatrocinador(slug, evento, formularioConfig, nivelesPatrocinio, errorMsg = null, prevData = {}) {
   const cfg      = formularioConfig || {};
   const niveles  = nivelesPatrocinio || [];
   const prevType = prevData.esEmpresa === 'false' ? 'persona' : 'empresa';
@@ -19,12 +19,35 @@ function renderFormPatrocinador(slug, evento, formularioConfig, nivelesPatrocini
     ? `<div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">${esc(errorMsg)}</div>`
     : '';
 
-  const nivelesOpts = niveles.length
-    ? niveles
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-        .map(n => {
-          const label = n.nombre + (n.monto ? ` — $${Number(n.monto).toLocaleString('es-CO')}` : '') + (n.descripcion ? ` (${n.descripcion})` : '');
-          return `<option value="${esc(n.nombre)}" ${prevData.nivelInteres === n.nombre ? 'selected' : ''}>${esc(label)}</option>`;
+  function precioLabel(n) {
+    if (n.pendienteValidar || (n.precioAfiliado == null && n.precioNoAfiliado == null)) return ' — precio a confirmar';
+    const sufijo = n.unidad === 'm2' ? '/m²' : '';
+    const afiliado = n.precioAfiliado != null ? `$${Number(n.precioAfiliado).toLocaleString('es-CO')}${sufijo} afiliados` : '';
+    const noAfiliado = n.precioNoAfiliado != null ? `$${Number(n.precioNoAfiliado).toLocaleString('es-CO')}${sufijo} no afiliados` : '';
+    const partes = [afiliado, noAfiliado].filter(Boolean);
+    return partes.length ? ` — ${partes.join(' / ')}` : '';
+  }
+
+  const nivelesOrdenados = niveles.length
+    ? [...niveles].sort((a, b) => (a.orden || 0) - (b.orden || 0))
+    : [];
+
+  const nivelesPorCategoria = nivelesOrdenados.reduce((acc, n) => {
+    const cat = n.categoria || 'Otros';
+    (acc[cat] = acc[cat] || []).push(n);
+    return acc;
+  }, {});
+
+  const nivelesOpts = nivelesOrdenados.length
+    ? Object.entries(nivelesPorCategoria)
+        .map(([categoria, items]) => {
+          const opciones = items
+            .map(n => {
+              const label = n.nombre + precioLabel(n);
+              return `<option value="${esc(n.nombre)}" ${prevData.nivelInteres === n.nombre ? 'selected' : ''}>${esc(label)}</option>`;
+            })
+            .join('');
+          return `<optgroup label="${esc(categoria)}">${opciones}</optgroup>`;
         })
         .join('')
     : '';
