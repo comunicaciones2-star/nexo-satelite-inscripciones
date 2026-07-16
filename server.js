@@ -35,7 +35,8 @@ app.get('/f/:slug', async (req, res) => {
       return res.status(r.status).send(renderError(d.message || 'Formulario no disponible.', r.status));
     }
     const { evento, formularioConfig } = await r.json();
-    res.send(renderForm(req.params.slug, evento, formularioConfig));
+    const canal = ['qr', 'manychat'].includes(req.query.canal) ? req.query.canal : '';
+    res.send(renderForm(req.params.slug, evento, formularioConfig, null, { canal }));
   } catch (err) {
     console.error('[GET /f/:slug]', err.message);
     res.status(500).send(renderError('Error al cargar el formulario.'));
@@ -63,6 +64,7 @@ app.post('/f/:slug', async (req, res) => {
       empresa:  b.empresa,
       nit:      b.nit,
       tipoAfiliacionDeclarada: b.tipoAfiliacionDeclarada,
+      canal: ['qr', 'manychat'].includes(b.canal) ? b.canal : undefined,
       respuestas,
       consentimiento: b.consentimiento_autorizado === 'on'
         ? { autorizado: true, version: b.consentimiento_version }

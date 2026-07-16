@@ -144,6 +144,7 @@ function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
   ${errorHtml}
 
   <form method="POST" action="/f/${esc(slug)}" class="space-y-4">
+    <input type="hidden" name="canal" value="${esc(prevData.canal || '')}">
     ${fields}
     <button type="submit"
       class="w-full bg-[#280071] hover:bg-[#1e0054] text-white font-semibold py-3 rounded-lg text-sm transition-colors">
@@ -256,6 +257,7 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
   </div>
   ${errorHtml}
   <form method="POST" action="/f/${esc(slug)}" class="space-y-4">
+    <input type="hidden" name="canal" value="${esc(prevData.canal || '')}">
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-1">Nombre <span class="text-red-500">*</span></label>
       <input type="text" name="nombre" value="${esc(prevData.nombre || '')}" required class="${INPUT}">
