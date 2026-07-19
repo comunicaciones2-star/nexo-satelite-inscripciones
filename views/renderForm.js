@@ -17,6 +17,107 @@ function label(etiqueta, requerido) {
   return `<label class="block text-sm font-medium text-gray-700 mb-1">${esc(etiqueta)}${requerido ? ' <span class="text-red-500">*</span>' : ''}</label>`;
 }
 
+// ── Barrio guiado por catálogo AMB (combobox con datalist + fallback libre) ──
+// Mismo regex que usa el CRM (routes/eventos.js, scripts/regeorreferenciar-inscritos.js,
+// routes/publicForms.js) para detectar el campo "barrio"/"municipio": no hay nombre
+// de campo fijo, es configurable por evento. Ver docs/spec_input_barrio_controlado.md.
+const RX_BARRIO = /barrio/i;
+const RX_MUNICIPIO = /municipio|ciudad|localidad/i;
+
+function renderBarrioField(inputName, etiqueta, requerido, prevVal, municipioInputName) {
+  const uid = inputName.replace(/[^a-zA-Z0-9]/g, '_');
+  const listId = `barrio_list_${uid}`;
+  return `<div data-barrio-field data-municipio-input="${esc(municipioInputName || '')}">
+    ${label(etiqueta, requerido)}
+    <input type="text" name="${esc(inputName)}" id="barrio_${uid}" list="${listId}"
+      value="${esc(prevVal)}" autocomplete="off"
+      ${requerido ? 'required' : ''} placeholder="Escribe o elige tu barrio…" class="${INPUT}">
+    <datalist id="${listId}"></datalist>
+    <label class="flex items-center gap-2 text-xs text-gray-500 mt-1.5 cursor-pointer">
+      <input type="checkbox" data-barrio-no-catalogado-toggle class="rounded">
+      No encuentro mi barrio en la lista
+    </label>
+    <input type="hidden" name="barrioId" data-barrio-id value="">
+    <input type="hidden" name="comuna" data-barrio-comuna value="">
+    <input type="hidden" name="barrioNoCatalogado" data-barrio-no-catalogado value="">
+  </div>`;
+}
+
+// Script único por formulario (solo se inyecta si hay campo "barrio"). Al cambiar
+// el municipio, trae el catálogo del CRM vía el proxy /barrios y lo pone en el
+// datalist. Si el texto tipeado calza exacto con una opción del catálogo, fija
+// barrioId/comuna (comuna en origen); si no, queda como texto libre (el CRM lo
+// geocodifica de respaldo). "No encuentro mi barrio" fuerza el modo libre.
+function renderBarrioScript() {
+  return `<script>
+(function(){
+  var wrap = document.querySelector('[data-barrio-field]');
+  if (!wrap) return;
+  var municipioInputName = wrap.getAttribute('data-municipio-input');
+  var municipioEl = municipioInputName ? document.querySelector('[name="' + municipioInputName + '"]') : null;
+  var barrioEl = wrap.querySelector('input[list]');
+  var listEl = wrap.querySelector('datalist');
+  var idEl = wrap.querySelector('[data-barrio-id]');
+  var comunaEl = wrap.querySelector('[data-barrio-comuna]');
+  var noCatEl = wrap.querySelector('[data-barrio-no-catalogado]');
+  var toggleEl = wrap.querySelector('[data-barrio-no-catalogado-toggle]');
+  var catalogo = [];
+
+  function etiquetaDe(b) { return b.nombre + (b.comuna != null ? ' · Comuna ' + b.comuna : ''); }
+
+  function cargarCatalogo(municipio) {
+    catalogo = [];
+    listEl.innerHTML = '';
+    idEl.value = ''; comunaEl.value = '';
+    if (!municipio) return;
+    fetch('/barrios?municipio=' + encodeURIComponent(municipio))
+      .then(function(r) { return r.ok ? r.json() : []; })
+      .then(function(data) {
+        catalogo = Array.isArray(data) ? data : [];
+        listEl.innerHTML = catalogo.map(function(b) {
+          return '<option value="' + etiquetaDe(b).replace(/"/g, '&quot;') + '">';
+        }).join('');
+      })
+      .catch(function() { catalogo = []; });
+  }
+
+  function matchSeleccion() {
+    var val = (barrioEl.value || '').trim();
+    var match = catalogo.find(function(b) { return etiquetaDe(b) === val || b.nombre === val; });
+    if (match) {
+      idEl.value = match.id;
+      comunaEl.value = match.comuna != null ? match.comuna : '';
+      noCatEl.value = '';
+      if (toggleEl) toggleEl.checked = false;
+    } else {
+      idEl.value = '';
+      comunaEl.value = '';
+    }
+  }
+
+  if (municipioEl) {
+    municipioEl.addEventListener('change', function() { cargarCatalogo(municipioEl.value); });
+    if (municipioEl.value) cargarCatalogo(municipioEl.value);
+  }
+  barrioEl.addEventListener('input', matchSeleccion);
+
+  if (toggleEl) {
+    toggleEl.addEventListener('change', function() {
+      if (toggleEl.checked) {
+        noCatEl.value = 'true';
+        idEl.value = ''; comunaEl.value = '';
+        barrioEl.removeAttribute('list');
+      } else {
+        noCatEl.value = '';
+        barrioEl.setAttribute('list', listEl.id);
+        matchSeleccion();
+      }
+    });
+  }
+})();
+</script>`;
+}
+
 // ── Render de un campo unificado (nuevo schema) ─────────────────────
 function renderCampo(campo, prevData) {
   const mapaA = campo.mapaA || '';
@@ -123,7 +224,21 @@ function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
       })
     : '';
 
-  const fields = camposFormulario.map(c => renderCampo(c, prevData)).join('\n');
+  const munCampoDef = camposFormulario.find(c => c.tipo !== 'seccion' && RX_MUNICIPIO.test(c.etiqueta || c.clave));
+  const munInputName = munCampoDef
+    ? ((munCampoDef.mapaA && munCampoDef.mapaA !== 'respuestas') ? munCampoDef.mapaA : `resp_${munCampoDef.clave}`)
+    : null;
+  let hayCampoBarrio = false;
+
+  const fields = camposFormulario.map(c => {
+    if (c.tipo !== 'seccion' && RX_BARRIO.test(c.etiqueta || c.clave)) {
+      hayCampoBarrio = true;
+      const mapaA = c.mapaA || '';
+      const inputName = (mapaA && mapaA !== 'respuestas') ? mapaA : `resp_${c.clave}`;
+      return renderBarrioField(inputName, c.etiqueta, !!c.requerido, prevData[inputName] || '', munInputName);
+    }
+    return renderCampo(c, prevData);
+  }).join('\n');
 
   const errorHtml = errorMsg
     ? `<div class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">${esc(errorMsg)}</div>`
@@ -151,6 +266,7 @@ function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
       Inscribirme →
     </button>
   </form>
+  ${hayCampoBarrio ? renderBarrioScript() : ''}
 </div>`;
 
   return layout(encabezado || evento.nombre || 'Inscripción', body);
@@ -191,6 +307,10 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
           placeholder="Opcional — para verificar afiliación">
       </div>` : '';
 
+  const munCampoDefLegacy = camposPersonalizados.find(c => RX_MUNICIPIO.test(c.etiqueta || c.clave));
+  const munInputNameLegacy = munCampoDefLegacy ? `resp_${munCampoDefLegacy.clave}` : null;
+  let hayCampoBarrioLegacy = false;
+
   const customFields = camposPersonalizados.map(c => {
     const name = `resp_${esc(c.clave)}`;
     const req = !!c.requerido;
@@ -198,6 +318,11 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
       ${esc(c.etiqueta || c.clave)}${req ? ' <span class="text-red-500">*</span>' : ''}
     </label>`;
     const prev = prevData[`resp_${c.clave}`] || '';
+
+    if (RX_BARRIO.test(c.etiqueta || c.clave)) {
+      hayCampoBarrioLegacy = true;
+      return renderBarrioField(`resp_${c.clave}`, c.etiqueta, req, prev, munInputNameLegacy);
+    }
 
     if (c.tipo === 'select' && c.opciones?.length) {
       const opts = c.opciones.map(o =>
@@ -280,6 +405,7 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
       Inscribirme →
     </button>
   </form>
+  ${hayCampoBarrioLegacy ? renderBarrioScript() : ''}
 </div>`;
 
   return layout(encabezado || evento.nombre || 'Inscripción', body);

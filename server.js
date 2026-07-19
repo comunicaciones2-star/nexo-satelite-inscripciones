@@ -26,6 +26,19 @@ async function nexoPost(path, body) {
   });
 }
 
+// GET /barrios?municipio=X → proxy del catálogo de barrios AMB (mismo origen, sin CORS)
+app.get('/barrios', async (req, res) => {
+  try {
+    const municipio = String(req.query.municipio || '');
+    const r = await nexoGet(`/api/public/barrios?municipio=${encodeURIComponent(municipio)}`);
+    const d = await r.json().catch(() => []);
+    res.status(r.ok ? 200 : r.status).json(Array.isArray(d) ? d : []);
+  } catch (err) {
+    console.error('[GET /barrios]', err.message);
+    res.status(500).json([]);
+  }
+});
+
 // GET /f/:slug → renderiza el formulario
 app.get('/f/:slug', async (req, res) => {
   try {
@@ -65,6 +78,12 @@ app.post('/f/:slug', async (req, res) => {
       nit:      b.nit,
       tipoAfiliacionDeclarada: b.tipoAfiliacionDeclarada,
       canal: ['qr', 'manychat'].includes(b.canal) ? b.canal : undefined,
+      // Combobox de barrio guiado por el catálogo AMB (ver docs/spec_input_barrio_controlado.md).
+      // Campos dedicados (no van dentro de "respuestas"): el CRM los usa para fijar
+      // la comuna en origen cuando eligió del catálogo, o geocodificar de respaldo.
+      barrioId:           b.barrioId || undefined,
+      comuna:             b.comuna || undefined,
+      barrioNoCatalogado: b.barrioNoCatalogado === 'true',
       respuestas,
       consentimiento: b.consentimiento_autorizado === 'on'
         ? { autorizado: true, version: b.consentimiento_version }
