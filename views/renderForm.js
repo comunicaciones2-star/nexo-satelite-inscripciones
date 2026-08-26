@@ -135,15 +135,19 @@ function renderCampo(campo, prevData) {
   if (campo.tipo === 'habeas_data') {
     const texto = campo.descripcion || '';
     if (!texto) return '';
+    // texto ya viene saneado con whitelist desde el servidor (sanitize-html al guardar
+    // el constructor, ver routes/eventos.js en fenalco-crm) — se inserta sin esc() para
+    // que <strong>/<a>/<em>/<br> se rendericen con formato, no como texto plano escapado.
+    const checked = prevData.consentimientos?.[campo.clave] === 'on';
+    const etiqueta = campo.etiqueta || 'Autorizo el tratamiento de mis datos personales';
     return `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-      <p class="text-xs text-gray-600 leading-relaxed">${esc(texto)}</p>
+      <p class="text-xs text-gray-600 leading-relaxed">${texto}</p>
       <label class="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-        <input type="checkbox" name="consentimiento_autorizado" value="on"
-          ${prevData.consentimiento_autorizado === 'on' ? 'checked' : ''}
+        <input type="checkbox" name="consentimientos[${esc(campo.clave)}]" value="on"
+          ${checked ? 'checked' : ''}
           ${req ? 'required' : ''} class="mt-0.5">
-        <span>Autorizo el tratamiento de mis datos personales${req ? ' <span class="text-red-500">*</span>' : ''}</span>
+        <span>${esc(etiqueta)}${req ? ' <span class="text-red-500">*</span>' : ''}</span>
       </label>
-      <input type="hidden" name="consentimiento_version" value="${esc(prevData.consentimiento_version || '')}">
     </div>`;
   }
 
@@ -353,16 +357,17 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
         </div>
       </div>` : '';
 
+  // texto ya viene saneado con whitelist desde el servidor — sin esc() para que
+  // <strong>/<a>/<em>/<br> se rendericen con formato (ver misma nota en renderCampo).
   const habeasField = habeasData?.texto
     ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-        <p class="text-xs text-gray-600 leading-relaxed">${esc(habeasData.texto)}</p>
+        <p class="text-xs text-gray-600 leading-relaxed">${habeasData.texto}</p>
         <label class="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-          <input type="checkbox" name="consentimiento_autorizado" value="on"
-            ${prevData.consentimiento_autorizado === 'on' ? 'checked' : ''}
+          <input type="checkbox" name="consentimientos[tratamiento_datos]" value="on"
+            ${prevData.consentimientos?.tratamiento_datos === 'on' ? 'checked' : ''}
             ${habeasData.requerido ? 'required' : ''} class="mt-0.5">
           <span>Autorizo el tratamiento de mis datos personales${habeasData.requerido ? ' <span class="text-red-500">*</span>' : ''}</span>
         </label>
-        <input type="hidden" name="consentimiento_version" value="${esc(habeasData.version || '')}">
       </div>` : '';
 
   const errorHtml = errorMsg

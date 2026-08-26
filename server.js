@@ -85,9 +85,10 @@ app.post('/f/:slug', async (req, res) => {
       comuna:             b.comuna || undefined,
       barrioNoCatalogado: b.barrioNoCatalogado === 'true',
       respuestas,
-      consentimiento: b.consentimiento_autorizado === 'on'
-        ? { autorizado: true, version: b.consentimiento_version }
-        : undefined,
+      // Un checkbox por clave de consentimiento (bracket notation: consentimientos[clave]=on,
+      // el body-parser urlencoded con extended:true lo arma como objeto). El servidor de NEXO
+      // estampa textoMostrado/version/fechaHora/ip — aquí solo se manda { clave, aceptado }.
+      consentimientos: Object.entries(b.consentimientos || {}).map(([clave, v]) => ({ clave, aceptado: v === 'on' })),
     };
 
     const r = await nexoPost(`/api/public-forms/${req.params.slug}/inscripciones`, payload);
