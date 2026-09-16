@@ -262,12 +262,12 @@ function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
 
   ${errorHtml}
 
-  <form method="POST" action="/f/${esc(slug)}" class="space-y-4">
+  <form method="POST" action="/${prevData.interesados ? 'interesados' : 'f'}/${esc(slug)}" class="space-y-4">
     <input type="hidden" name="canal" value="${esc(prevData.canal || '')}">
     ${fields}
     <button type="submit"
       class="w-full bg-[#280071] hover:bg-[#1e0054] text-white font-semibold py-3 rounded-lg text-sm transition-colors">
-      Inscribirme →
+      ${prevData.interesados ? 'Quiero información' : 'Enviar inscripción'} →
     </button>
   </form>
   ${hayCampoBarrio ? renderBarrioScript() : ''}
@@ -386,7 +386,7 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
     </div>` : ''}
   </div>
   ${errorHtml}
-  <form method="POST" action="/f/${esc(slug)}" class="space-y-4">
+  <form method="POST" action="/${prevData.interesados ? 'interesados' : 'f'}/${esc(slug)}" class="space-y-4">
     <input type="hidden" name="canal" value="${esc(prevData.canal || '')}">
     <div>
       <label class="block text-sm font-medium text-gray-700 mb-1">Nombre <span class="text-red-500">*</span></label>
@@ -407,7 +407,7 @@ function renderFormLegacy(slug, evento, cfg, errorMsg, prevData) {
     ${habeasField}
     <button type="submit"
       class="w-full bg-[#280071] hover:bg-[#1e0054] text-white font-semibold py-3 rounded-lg text-sm transition-colors">
-      Inscribirme →
+      ${prevData.interesados ? 'Quiero información' : 'Enviar inscripción'} →
     </button>
   </form>
   ${hayCampoBarrioLegacy ? renderBarrioScript() : ''}

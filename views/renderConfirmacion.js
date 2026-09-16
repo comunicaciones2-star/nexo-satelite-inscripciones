@@ -1,6 +1,9 @@
 const { layout, esc } = require('./layout');
 
-function renderConfirmacion(codigo, mensaje) {
+function renderConfirmacion(codigo, mensaje, tipoRegistro) {
+  if (['interesado', 'participante'].includes(tipoRegistro)) {
+    return layout('Solicitud recibida', `<div class="bg-white rounded-2xl border p-8 text-center space-y-5"><h1 class="text-xl font-bold">${tipoRegistro === 'interesado' ? '¡Gracias por tu interés!' : 'Solicitud de inscripción recibida'}</h1><p>${esc(mensaje || 'Hemos recibido tus datos.')}</p></div>`);
+  }
   const body = `
 <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center space-y-5">
   <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">

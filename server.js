@@ -8,6 +8,7 @@ const { renderFormPatrocinador }   = require('./views/renderFormPatrocinador');
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(require('./vendeConVentaja'));
 
 const NEXO_URL     = process.env.NEXO_URL     || 'http://localhost:5000';
 const NEXO_API_KEY = process.env.NEXO_API_KEY || '';
@@ -40,16 +41,18 @@ app.get('/barrios', async (req, res) => {
 });
 
 // GET /f/:slug → renderiza el formulario
-app.get('/f/:slug', async (req, res) => {
+app.get(['/f/:slug', '/interesados/:slug'], async (req, res) => {
   try {
-    const r = await nexoGet(`/api/public-forms/${req.params.slug}`);
+    const interesados = req.path.startsWith('/interesados/');
+    const suffix = interesados ? '/interesados' : '';
+    const r = await nexoGet(`/api/public-forms/${req.params.slug}${suffix}`);
     if (!r.ok) {
       const d = await r.json().catch(() => ({}));
       return res.status(r.status).send(renderError(d.message || 'Formulario no disponible.', r.status));
     }
     const { evento, formularioConfig } = await r.json();
     const canal = ['qr', 'manychat'].includes(req.query.canal) ? req.query.canal : '';
-    res.send(renderForm(req.params.slug, evento, formularioConfig, null, { canal }));
+    res.send(renderForm(req.params.slug, evento, formularioConfig, null, { canal, interesados }));
   } catch (err) {
     console.error('[GET /f/:slug]', err.message);
     res.status(500).send(renderError('Error al cargar el formulario.'));
@@ -57,9 +60,10 @@ app.get('/f/:slug', async (req, res) => {
 });
 
 // POST /f/:slug → reenvía inscripción a NEXO
-app.post('/f/:slug', async (req, res) => {
+app.post(['/f/:slug', '/interesados/:slug'], async (req, res) => {
   try {
     const b = req.body || {};
+    const interesados = req.path.startsWith('/interesados/');
 
     // Extraer respuestas de campos personalizados (prefijo resp_)
     const respuestas = {};
@@ -91,22 +95,22 @@ app.post('/f/:slug', async (req, res) => {
       consentimientos: Object.entries(b.consentimientos || {}).map(([clave, v]) => ({ clave, aceptado: v === 'on' })),
     };
 
-    const r = await nexoPost(`/api/public-forms/${req.params.slug}/inscripciones`, payload);
+    const r = await nexoPost(`/api/public-forms/${req.params.slug}/${interesados ? 'interesados' : 'inscripciones'}`, payload);
     const d = await r.json().catch(() => ({}));
 
     if (!r.ok) {
       // Re-carga config y re-renderiza el formulario con el error y los valores anteriores
-      const cfgR = await nexoGet(`/api/public-forms/${req.params.slug}`);
+      const cfgR = await nexoGet(`/api/public-forms/${req.params.slug}${interesados ? '/interesados' : ''}`);
       if (cfgR.ok) {
         const { evento, formularioConfig } = await cfgR.json();
         return res.status(r.status).send(
-          renderForm(req.params.slug, evento, formularioConfig, d.message || 'No se pudo registrar la inscripción.', b)
+          renderForm(req.params.slug, evento, formularioConfig, d.message || 'No se pudo registrar la inscripción.', { ...b, interesados })
         );
       }
       return res.status(r.status).send(renderError(d.message || 'No se pudo registrar la inscripción.', r.status));
     }
 
-    res.send(renderConfirmacion(d.codigo, d.mensaje));
+    res.send(renderConfirmacion(d.codigo, d.mensaje, d.tipoRegistro));
   } catch (err) {
     console.error('[POST /f/:slug]', err.message);
     res.status(500).send(renderError('Error al procesar la inscripción.'));
@@ -196,4 +200,5 @@ app.post('/patrocinador/:slug', async (req, res) => {
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, () => console.log(`Satélite corriendo en http://localhost:${PORT}`));
+app.listen(PORT, process.env.HOST || '0.0.0.0', () => console.log(`Satélite corriendo en http://localhost:${PORT}`));
+if (process.env.LANDING_PORT) app.listen(Number(process.env.LANDING_PORT), '127.0.0.1', () => console.log(`Landing: http://127.0.0.1:${process.env.LANDING_PORT}/vende-con-ventaja.html`));
