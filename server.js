@@ -110,7 +110,7 @@ app.post(['/f/:slug', '/interesados/:slug'], async (req, res) => {
       return res.status(r.status).send(renderError(d.message || 'No se pudo registrar la inscripción.', r.status));
     }
 
-    res.send(renderConfirmacion(d.codigo, d.mensaje, d.tipoRegistro));
+    res.send(renderConfirmacion(d.codigo, d.mensaje, d.tipoRegistro, d.pendientePago));
   } catch (err) {
     console.error('[POST /f/:slug]', err.message);
     res.status(500).send(renderError('Error al procesar la inscripción.'));
