@@ -4,6 +4,7 @@ const { renderForm }               = require('./views/renderForm');
 const { renderConfirmacion }       = require('./views/renderConfirmacion');
 const { renderError }              = require('./views/renderError');
 const { renderFormPatrocinador }   = require('./views/renderFormPatrocinador');
+const { renderEncuesta, renderGracias } = require('./views/renderEncuesta');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -193,6 +194,59 @@ app.post('/patrocinador/:slug', async (req, res) => {
   } catch (err) {
     console.error('[POST /patrocinador/:slug]', err.message);
     res.status(500).send(renderError('Error al procesar la solicitud.'));
+  }
+});
+
+// ── Encuestas (anónimas o identificadas) ──────────────────────────────
+
+// GET /e/:slug → renderiza la encuesta
+app.get('/e/:slug', async (req, res) => {
+  try {
+    const r = await nexoGet(`/api/public-encuestas/${encodeURIComponent(req.params.slug)}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) return res.status(r.status).send(renderError(d.message || 'Encuesta no disponible.', r.status));
+    res.send(renderEncuesta(req.params.slug, d.encuesta, null));
+  } catch (err) {
+    console.error('[GET /e/:slug]', err.message);
+    res.status(500).send(renderError('Error al cargar la encuesta.'));
+  }
+});
+
+// POST /e/:slug → reenvía las respuestas a NEXO
+app.post('/e/:slug', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const respuestas = {};
+    const otros = {};
+    for (const key of Object.keys(b)) {
+      if (key.startsWith('resp_')) respuestas[key.slice(5)] = b[key];
+      else if (key.startsWith('otro_') && String(b[key] || '').trim()) otros[key.slice(5)] = b[key];
+    }
+    // El texto de "Otro" solo cuenta si esa opción quedó marcada.
+    for (const clave of Object.keys(otros)) {
+      if (![].concat(respuestas[clave] || []).includes('__otro__')) delete otros[clave];
+    }
+
+    const r = await nexoPost(`/api/public-encuestas/${encodeURIComponent(req.params.slug)}`, {
+      respuestas, otros,
+      respondiente: { nombre: b.nombre, empresa: b.empresa, nit: b.nit },
+    });
+    const d = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      if (r.status === 400) {
+        const cfgR = await nexoGet(`/api/public-encuestas/${encodeURIComponent(req.params.slug)}`);
+        if (cfgR.ok) {
+          const { encuesta } = await cfgR.json();
+          return res.status(400).send(renderEncuesta(req.params.slug, encuesta, d.message, b));
+        }
+      }
+      return res.status(r.status).send(renderError(d.message || 'No se pudo registrar tu respuesta.', r.status));
+    }
+    res.send(renderGracias());
+  } catch (err) {
+    console.error('[POST /e/:slug]', err.message);
+    res.status(500).send(renderError('Error al procesar tu respuesta.'));
   }
 });
 
