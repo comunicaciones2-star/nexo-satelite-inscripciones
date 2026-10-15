@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const multer = require('multer');
 const { renderForm }               = require('./views/renderForm');
 const { renderConfirmacion }       = require('./views/renderConfirmacion');
 const { renderError }              = require('./views/renderError');
@@ -20,11 +21,46 @@ async function nexoGet(path) {
   });
 }
 
-async function nexoPost(path, body) {
+async function nexoPost(path, body, logo) {
+  let contenido = JSON.stringify(body);
+  const headers = { 'x-api-key': NEXO_API_KEY };
+  if (logo) {
+    contenido = new FormData();
+    contenido.append('datos', JSON.stringify(body));
+    contenido.append('logoEmpresa', new Blob([logo.buffer], { type: logo.mimetype }), logo.originalname);
+  } else {
+    headers['Content-Type'] = 'application/json';
+  }
   return fetch(`${NEXO_URL}${path}`, {
     method: 'POST',
-    headers: { 'x-api-key': NEXO_API_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers,
+    body: contenido,
+  });
+}
+
+const uploadLogoCafe = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 + 1, files: 1, fields: 30, fieldSize: 10000, parts: 32 },
+  fileFilter(req, file, cb) {
+    cb(/\.(ai|eps|pdf|svg|png)$/i.test(file.originalname) ? null : new Error('Formato no permitido.'), true);
+  },
+}).single('logoEmpresa');
+
+function recibirLogoCafe(req, res, next) {
+  if (req.params.slug !== 'cafe-y-comercio-2026' || req.path.startsWith('/interesados/')) return next();
+  uploadLogoCafe(req, res, async err => {
+    if (!err && req.file?.size > 25 * 1024 * 1024) err = { code: 'LIMIT_FILE_SIZE' };
+    if (!err) return next();
+    const message = 'Adjunta un logo .ai, .eps, .pdf, .svg o .png de máximo 25 MB. Vuelve a seleccionar el archivo.';
+    const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    try {
+      const r = await nexoGet(`/api/public-forms/${req.params.slug}`);
+      if (r.ok) {
+        const { evento, formularioConfig } = await r.json();
+        return res.status(status).send(renderForm(req.params.slug, evento, formularioConfig, message, req.body || {}));
+      }
+    } catch {}
+    res.status(status).send(renderError(message, status));
   });
 }
 
@@ -61,7 +97,7 @@ app.get(['/f/:slug', '/interesados/:slug'], async (req, res) => {
 });
 
 // POST /f/:slug → reenvía inscripción a NEXO
-app.post(['/f/:slug', '/interesados/:slug'], async (req, res) => {
+app.post(['/f/:slug', '/interesados/:slug'], recibirLogoCafe, async (req, res) => {
   try {
     const b = req.body || {};
     const interesados = req.path.startsWith('/interesados/');
@@ -96,7 +132,7 @@ app.post(['/f/:slug', '/interesados/:slug'], async (req, res) => {
       consentimientos: Object.entries(b.consentimientos || {}).map(([clave, v]) => ({ clave, aceptado: v === 'on' })),
     };
 
-    const r = await nexoPost(`/api/public-forms/${req.params.slug}/${interesados ? 'interesados' : 'inscripciones'}`, payload);
+    const r = await nexoPost(`/api/public-forms/${req.params.slug}/${interesados ? 'interesados' : 'inscripciones'}`, payload, req.file);
     const d = await r.json().catch(() => ({}));
 
     if (!r.ok) {
@@ -254,5 +290,8 @@ app.post('/e/:slug', async (req, res) => {
 app.get('/health', (_req, res) => res.json({ status: 'ok', ts: new Date().toISOString() }));
 
 const PORT = process.env.PORT || 5050;
-app.listen(PORT, process.env.HOST || '0.0.0.0', () => console.log(`Satélite corriendo en http://localhost:${PORT}`));
-if (process.env.LANDING_PORT) app.listen(Number(process.env.LANDING_PORT), '127.0.0.1', () => console.log(`Landing: http://127.0.0.1:${process.env.LANDING_PORT}/vende-con-ventaja.html`));
+if (require.main === module) {
+  app.listen(PORT, process.env.HOST || '0.0.0.0', () => console.log(`Satélite corriendo en http://localhost:${PORT}`));
+  if (process.env.LANDING_PORT) app.listen(Number(process.env.LANDING_PORT), '127.0.0.1', () => console.log(`Landing: http://127.0.0.1:${process.env.LANDING_PORT}/vende-con-ventaja.html`));
+}
+module.exports = app;

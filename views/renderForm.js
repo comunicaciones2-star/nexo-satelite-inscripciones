@@ -220,6 +220,7 @@ function renderCampo(campo, prevData) {
 // ── Render con nuevo schema (camposFormulario) ───────────────────────
 function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
   const { encabezado, descripcion, camposFormulario = [], mensajeConfirmacion } = cfg;
+  const pideLogo = slug === 'cafe-y-comercio-2026' && !prevData.interesados;
 
   const fechaEvento = evento.fechaInicio
     ? new Date(evento.fechaInicio).toLocaleDateString('es-CO', {
@@ -262,14 +263,45 @@ function renderFormNuevo(slug, evento, cfg, errorMsg, prevData) {
 
   ${errorHtml}
 
-  <form method="POST" action="/${prevData.interesados ? 'interesados' : 'f'}/${esc(slug)}" class="space-y-4">
+  <form method="POST" ${pideLogo ? 'enctype="multipart/form-data" id="form-cafe-comercio"' : ''} action="/${prevData.interesados ? 'interesados' : 'f'}/${esc(slug)}" class="space-y-4">
     <input type="hidden" name="canal" value="${esc(prevData.canal || '')}">
     ${fields}
+    ${pideLogo ? `
+    <div>
+      <label for="logoEmpresa" class="block text-sm font-medium text-gray-700 mb-1">Logo de tu empresa <span class="text-red-500">*</span></label>
+      <input id="logoEmpresa" name="logoEmpresa" type="file" required accept=".ai,.eps,.pdf,.svg,.png"
+        aria-describedby="logoEmpresa-ayuda logoEmpresa-estado" class="block w-full min-h-[44px] rounded-lg border border-gray-300 p-3 text-base focus:ring-2 focus:ring-[#280071]">
+      <p id="logoEmpresa-ayuda" class="mt-1 text-sm text-gray-600">Formatos .ai, .eps, .pdf, .svg o .png · máx. 25 MB</p>
+      <p id="logoEmpresa-estado" role="status" aria-live="polite" class="mt-1 text-sm text-gray-700"></p>
+    </div>` : ''}
     <button type="submit"
       class="w-full bg-[#280071] hover:bg-[#1e0054] text-white font-semibold py-3 rounded-lg text-sm transition-colors">
       ${prevData.interesados ? 'Quiero información' : 'Enviar inscripción'} →
     </button>
   </form>
+  ${pideLogo ? `<script>
+  (() => {
+    const input = document.getElementById('logoEmpresa');
+    const estado = document.getElementById('logoEmpresa-estado');
+    input.addEventListener('change', () => {
+      const file = input.files[0];
+      let error = '';
+      if (file && !/\\.(ai|eps|pdf|svg|png)$/i.test(file.name)) error = 'Formato no permitido. Usa .ai, .eps, .pdf, .svg o .png.';
+      else if (file && file.size > 25 * 1024 * 1024) error = 'El archivo supera los 25 MB. Selecciona uno más pequeño.';
+      else if (file && file.size === 0) error = 'El archivo está vacío. Selecciona otro archivo.';
+      input.setCustomValidity(error);
+      input.setAttribute('aria-invalid', error ? 'true' : 'false');
+      estado.textContent = error || (file ? file.name + ' · ' + (file.size / 1024 / 1024).toFixed(2) + ' MB' : '');
+      estado.className = 'mt-1 text-sm ' + (error ? 'text-red-700' : 'text-gray-700');
+    });
+    document.getElementById('form-cafe-comercio').addEventListener('submit', event => {
+      const boton = event.target.querySelector('button[type="submit"]');
+      boton.disabled = true;
+      boton.textContent = 'Enviando inscripción y logo…';
+      estado.textContent = 'Estamos cargando tu archivo. Mantén esta página abierta.';
+    });
+  })();
+  </script>` : ''}
   ${hayCampoBarrio ? renderBarrioScript() : ''}
 </div>`;
 
