@@ -6,6 +6,7 @@ const { renderConfirmacion }       = require('./views/renderConfirmacion');
 const { renderError }              = require('./views/renderError');
 const { renderFormPatrocinador }   = require('./views/renderFormPatrocinador');
 const { renderEncuesta, renderGracias } = require('./views/renderEncuesta');
+const { renderFormEvento, renderConfirmacionEvento } = require('./views/renderFormEvento');
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
@@ -150,6 +151,60 @@ app.post(['/f/:slug', '/interesados/:slug'], recibirLogoCafe, async (req, res) =
     res.send(renderConfirmacion(d.codigo, d.mensaje, d.tipoRegistro, d.pendientePago));
   } catch (err) {
     console.error('[POST /f/:slug]', err.message);
+    res.status(500).send(renderError('Error al procesar la inscripción.'));
+  }
+});
+
+// ── Formulario declarativo por evento (formularios[] del CRM) ─────────
+// GET /f/:slug/:codigo → renderiza el formulario con sus campos condicionales
+app.get('/f/:slug/:codigo', async (req, res) => {
+  try {
+    const r = await nexoGet(`/api/public-forms/${encodeURIComponent(req.params.slug)}/formularios/${encodeURIComponent(req.params.codigo)}`);
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      return res.status(r.status).send(renderError(d.message || 'Formulario no disponible.', r.status));
+    }
+    const { evento, formulario } = await r.json();
+    res.send(renderFormEvento(req.params.slug, req.params.codigo, evento, formulario, null, {}));
+  } catch (err) {
+    console.error('[GET /f/:slug/:codigo]', err.message);
+    res.status(500).send(renderError('Error al cargar el formulario.'));
+  }
+});
+
+// POST /f/:slug/:codigo → arma el payload según la definición y lo reenvía a NEXO,
+// que valida (incluidas las reglas condicionales) y descarta lo que no aplica.
+app.post('/f/:slug/:codigo', async (req, res) => {
+  const ruta = `/api/public-forms/${encodeURIComponent(req.params.slug)}/formularios/${encodeURIComponent(req.params.codigo)}`;
+  try {
+    const b = req.body || {};
+    const defR = await nexoGet(ruta);
+    if (!defR.ok) {
+      const d = await defR.json().catch(() => ({}));
+      return res.status(defR.status).send(renderError(d.message || 'Formulario no disponible.', defR.status));
+    }
+    const { evento, formulario } = await defR.json();
+
+    const payload = { respuestas: {} };
+    for (const campo of formulario.campos || []) {
+      if (campo.tipo === 'seccion' || campo.tipo === 'habeas_data') continue;
+      const mapaA = campo.mapaA && campo.mapaA !== 'respuestas' ? campo.mapaA : '';
+      const valor = mapaA ? b[mapaA] : b[`resp_${campo.clave}`];
+      if (valor === undefined) continue;
+      if (mapaA) payload[mapaA] = valor; else payload.respuestas[campo.clave] = valor;
+    }
+    payload.consentimientos = Object.entries(b.consentimientos || {}).map(([clave, v]) => ({ clave, aceptado: v === 'on' }));
+
+    const r = await nexoPost(ruta, payload);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      return res.status(r.status).send(
+        renderFormEvento(req.params.slug, req.params.codigo, evento, formulario, d.message || 'No se pudo registrar la inscripción.', b)
+      );
+    }
+    res.send(renderConfirmacionEvento(evento));
+  } catch (err) {
+    console.error('[POST /f/:slug/:codigo]', err.message);
     res.status(500).send(renderError('Error al procesar la inscripción.'));
   }
 });
